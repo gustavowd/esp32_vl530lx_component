@@ -31,30 +31,48 @@ public:
   VL53L0X(i2c_port_t i2c_port = I2C_NUM_0, gpio_num_t gpio_xshut = GPIO_NUM_MAX,
           gpio_num_t gpio_gpio1 = GPIO_NUM_MAX)
       : i2c_port(i2c_port), gpio_xshut(gpio_xshut), gpio_gpio1(gpio_gpio1) {
+    // turn off the sensor by pulling XSHUT pin low
+    if (gpio_xshut != GPIO_NUM_MAX) {
+      gpio_set_direction(gpio_xshut, GPIO_MODE_OUTPUT);
+      gpio_set_level(gpio_xshut, 0);
+    }
     vSemaphoreCreateBinary(xSemaphore);
   }
 
   bool init(i2c_master_dev_handle_t dev_handle, uint8_t device_addres = VL53L0X_I2C_ADDRESS_DEFAULT) {
     /* gpio init */
     ESP_LOGI(TAG, "Initing VL53L0X");
-    if (gpio_xshut != GPIO_NUM_MAX) {
-      gpio_set_direction(gpio_xshut, GPIO_MODE_OUTPUT);
-      gpio_set_level(gpio_xshut, 1);
-    }
     if (gpio_gpio1 != GPIO_NUM_MAX) {
       ESP_ERROR_CHECK(gpio_set_direction(gpio_gpio1, GPIO_MODE_INPUT));
       ESP_ERROR_CHECK(gpio_set_pull_mode(gpio_gpio1, GPIO_PULLUP_ONLY));
       ESP_ERROR_CHECK(gpio_pullup_en(gpio_gpio1));
-      ESP_ERROR_CHECK(gpio_set_intr_type(gpio_gpio1, GPIO_INTR_POSEDGE));
-      ESP_ERROR_CHECK(gpio_install_isr_service(0));
+
+      esp_err_t err = gpio_install_isr_service(0);
+    if (err == ESP_OK) {
+        // Instalado agora
+    } else if (err == ESP_ERR_INVALID_STATE) {
+        // Já estava instalado - não é erro
+    } else {
+        // Erro real
+        ESP_LOGE(TAG, "Erro: %s", esp_err_to_name(err));
+    }
+
+      ESP_ERROR_CHECK(gpio_set_intr_type(gpio_gpio1, GPIO_INTR_NEGEDGE));
       ESP_ERROR_CHECK(gpio_isr_handler_add(gpio_gpio1, gpio1_isr, this));
       ESP_ERROR_CHECK(gpio_intr_enable(gpio_gpio1));
     }
     /* device init */
     vl53l0x_dev.dev_handle = dev_handle;
     vl53l0x_dev.i2c_port_num = i2c_port;
-    vl53l0x_dev.i2c_address = device_addres;
+    vl53l0x_dev.i2c_address = VL53L0X_I2C_ADDRESS_DEFAULT;
+
     reset();
+
+    if (device_addres != VL53L0X_I2C_ADDRESS_DEFAULT) {
+      setDeviceAddress(device_addres);
+      vl53l0x_dev.i2c_address = device_addres;
+    }
+
     if (init_vl53l0x(&vl53l0x_dev) != VL53L0X_ERROR_NONE)
       return false;
     if (VL53L0X_ERROR_NONE !=
@@ -68,9 +86,8 @@ public:
     return true;
   }
   bool reset() {
-    if (!softwareReset())
-      return hardwareReset();
-    return true;
+    hardwareReset();
+    return softwareReset();
   }
   bool hardwareReset() {
     if (gpio_xshut == GPIO_NUM_MAX)
@@ -100,7 +117,7 @@ public:
         // VL53L0X_SetDeviceAddress expects the address to be left-aligned
         VL53L0X_SetDeviceAddress(&vl53l0x_dev, new_address << 1);
     if (status != VL53L0X_ERROR_NONE) {
-      print_pal_error(status, "VL53L0X_PerformSingleRangingMeasurement");
+      print_pal_error(status, "VL53L0X_setDeviceAddress");
       return false;
     }
 
@@ -174,6 +191,11 @@ public:
     }
     // clear semphr
     xSemaphoreTake(xSemaphore, 0);
+    // clear interrupt
+    VL53L0X_ClearInterruptMask(&vl53l0x_dev, 0);
+    if (status != VL53L0X_ERROR_NONE)
+      return false;
+
     // start measurement
     status = VL53L0X_StartMeasurement(&vl53l0x_dev);
     if (status != VL53L0X_ERROR_NONE) {
@@ -321,6 +343,7 @@ protected:
 
   static void IRAM_ATTR gpio1_isr(void *arg) {
     VL53L0X *obj = static_cast<VL53L0X *>(arg);
+    //ESP_LOGI(TAG, "Interrupt at time %d\n", xTaskGetTickCount());
     xSemaphoreGiveFromISR(obj->xSemaphore, NULL);
   }
   static VL53L0X_Error print_pal_error(VL53L0X_Error status,

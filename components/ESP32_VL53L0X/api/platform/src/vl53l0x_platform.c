@@ -1,6 +1,8 @@
 #include "vl53l0x_platform.h"
 
-#include "driver/i2c.h"
+#include "driver/i2c_master.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "esp_err.h"
 #include "esp_log.h"
 
@@ -35,6 +37,10 @@ VL53L0X_Error VL53L0X_WriteMulti(VL53L0X_DEV dev, uint8_t index,uint8_t *data, u
     uint8_t write_buf[len + 1];
     write_buf[0] = index;
     memcpy(&write_buf[1], data, len);
+    if (i2c_master_device_get_device_address(dev->dev_handle) != dev->i2c_address) {
+        i2c_master_device_change_address(dev->dev_handle, dev->i2c_address, 10);
+    }
+
     esp_err_t ret = i2c_master_transmit(dev->dev_handle, write_buf, len + 1, I2C_MASTER_TIMEOUT_MS);
     return esp_to_vl53l0x_error(ret);
 }
@@ -50,6 +56,9 @@ VL53L0X_Error VL53L0X_WriteMulti(VL53L0X_DEV dev, uint8_t index,uint8_t *data, u
  * @return  "Other error code"    See ::VL53L0X_Error
  */
 VL53L0X_Error VL53L0X_ReadMulti(VL53L0X_DEV dev, uint8_t index, uint8_t *data, uint32_t len) {
+    if (i2c_master_device_get_device_address(dev->dev_handle) != dev->i2c_address) {
+        i2c_master_device_change_address(dev->dev_handle, dev->i2c_address, 10);
+    }
     esp_err_t ret = i2c_master_transmit_receive(dev->dev_handle, &index, 1, data, len, I2C_MASTER_TIMEOUT_MS);
     return esp_to_vl53l0x_error(ret);
 }

@@ -51,6 +51,7 @@
 #endif
 
 /* Group PAL General Functions */
+#define USE_I2C_2V8
 
 VL53L0X_Error VL53L0X_GetVersion(VL53L0X_Version_t *pVersion)
 {

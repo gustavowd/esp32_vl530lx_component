@@ -1,5 +1,6 @@
 {
     "files.associations": {
-        "vl53l0x_platform_log.h": "c"
+        "vl53l0x_platform_log.h": "c",
+        "compare": "c"
     }
 }

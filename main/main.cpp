@@ -39,7 +39,7 @@ extern "C" void app_main(void)
   static i2c_master_bus_handle_t bus_handle;
   static i2c_master_dev_handle_t dev_handle;
 
-  VL53L0X vl(PORT_NUMBER, CI1_IO_PIN);
+  VL53L0X vl(PORT_NUMBER, CI1_IO_PIN, INT_PIN);
   #if (VL53L0X_DUAL_SENSOR == 1)
   VL53L0X vl2(PORT_NUMBER, CI2_IO_PIN, INT2_PIN);
   #endif
@@ -79,15 +79,24 @@ extern "C" void app_main(void)
     vTaskDelay(portMAX_DELAY);
   }
   //vl2.setTimingBudget(300 * 1000UL);
+  #else
+  //vl.StartContinuousWithInterrupt();
   #endif
 
   while (1) {
     /* measurement */
     uint16_t result_mm = 0;
+    #if (VL53L0X_DUAL_SENSOR == 1)
     TickType_t tick_start = xTaskGetTickCount();
-    bool res = vl.read(&result_mm);
-    //bool res = vl.readSingleWithInterrupt(&result_mm);
+    //bool res = vl.read(&result_mm);
+    bool res = vl.readSingleWithInterrupt(&result_mm);
     TickType_t tick_end = xTaskGetTickCount();
+    #else
+    TickType_t tick_start = xTaskGetTickCount();
+    bool res = vl.readSingleWithInterrupt(&result_mm);
+    //bool res = vl.readContinuousWithInterrupt(&result_mm);
+    TickType_t tick_end = xTaskGetTickCount();
+    #endif
 
     int took_ms = ((int)tick_end - tick_start);
     if (res)
@@ -108,6 +117,6 @@ extern "C" void app_main(void)
       ESP_LOGE(TAG, "Failed to measure :(");
     #endif
 
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    //vTaskDelay(500 / portTICK_PERIOD_MS);
   }
 }

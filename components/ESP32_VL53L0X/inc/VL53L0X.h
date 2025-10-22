@@ -36,7 +36,12 @@ public:
       gpio_set_direction(gpio_xshut, GPIO_MODE_OUTPUT);
       gpio_set_level(gpio_xshut, 0);
     }
-    vSemaphoreCreateBinary(xSemaphore);
+    xSemaphore = xSemaphoreCreateBinary();
+    if (xSemaphore == NULL) {
+      ESP_LOGE(TAG, "Failed to create semaphore");
+    }else{
+      ESP_LOGI(TAG, "Semaphore created at address %p", xSemaphore);
+    }
   }
 
   bool init(i2c_master_dev_handle_t dev_handle, uint8_t device_addres = VL53L0X_I2C_ADDRESS_DEFAULT) {
@@ -183,18 +188,11 @@ public:
       return false;
     VL53L0X_Error status;
     // set mode
-    status =
-        VL53L0X_SetDeviceMode(&vl53l0x_dev, VL53L0X_DEVICEMODE_SINGLE_RANGING);
+    status = VL53L0X_SetDeviceMode(&vl53l0x_dev, VL53L0X_DEVICEMODE_SINGLE_RANGING);
     if (status != VL53L0X_ERROR_NONE) {
       print_pal_error(status, "VL53L0X_SetDeviceMode");
       return false;
     }
-    // clear semphr
-    xSemaphoreTake(xSemaphore, 0);
-    // clear interrupt
-    VL53L0X_ClearInterruptMask(&vl53l0x_dev, 0);
-    if (status != VL53L0X_ERROR_NONE)
-      return false;
 
     // start measurement
     status = VL53L0X_StartMeasurement(&vl53l0x_dev);
@@ -202,8 +200,12 @@ public:
       print_pal_error(status, "VL53L0X_StartMeasurement");
       return false;
     }
+
+    // clear semphr
+    xSemaphoreTake(xSemaphore, 0);
+
     // wait for interrupt
-    xSemaphoreTake(xSemaphore, 1000 / portMAX_DELAY);
+    xSemaphoreTake(xSemaphore, 1000);
     // get data
     VL53L0X_RangingMeasurementData_t MeasurementData;
     status = VL53L0X_GetRangingMeasurementData(&vl53l0x_dev, &MeasurementData);
@@ -221,13 +223,12 @@ public:
     return true;
   }
 
-    bool readContinuousWithInterrupt(uint16_t *pRangeMilliMeter) {
+    bool StartContinuousWithInterrupt(void) {
     if (gpio_gpio1 == GPIO_NUM_MAX)
       return false;
     VL53L0X_Error status;
     // set mode
-    status =
-        VL53L0X_SetDeviceMode(&vl53l0x_dev, VL53L0X_DEVICEMODE_CONTINUOUS_RANGING);
+    status = VL53L0X_SetDeviceMode(&vl53l0x_dev, VL53L0X_DEVICEMODE_CONTINUOUS_RANGING);
     if (status != VL53L0X_ERROR_NONE) {
       print_pal_error(status, "VL53L0X_SetDeviceMode");
       return false;
@@ -240,6 +241,14 @@ public:
       print_pal_error(status, "VL53L0X_StartMeasurement");
       return false;
     }
+    return true;
+  }
+
+  bool readContinuousWithInterrupt(uint16_t *pRangeMilliMeter) {
+    if (gpio_gpio1 == GPIO_NUM_MAX)
+      return false;
+    VL53L0X_Error status;
+
     // wait for interrupt
     xSemaphoreTake(xSemaphore, 1000 / portMAX_DELAY);
     // get data
@@ -343,7 +352,6 @@ protected:
 
   static void IRAM_ATTR gpio1_isr(void *arg) {
     VL53L0X *obj = static_cast<VL53L0X *>(arg);
-    //ESP_LOGI(TAG, "Interrupt at time %d\n", xTaskGetTickCount());
     xSemaphoreGiveFromISR(obj->xSemaphore, NULL);
   }
   static VL53L0X_Error print_pal_error(VL53L0X_Error status,

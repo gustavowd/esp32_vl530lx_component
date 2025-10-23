@@ -57,20 +57,12 @@ extern "C" void app_main(void)
   }
   #endif
 
-  #if defined LONG_RANGE
-  // lower the return signal rate limit (default is 0.25 MCPS)
-  vl.setSignalRateLimit(0.1);
-  // increase laser pulse periods (defaults are 14 and 10 PCLKs)
-	vl.setVcselPulsePeriod(VL53L0X_VCSEL_PERIOD_PRE_RANGE, 18);
-	vl.setVcselPulsePeriod(VL53L0X_VCSEL_PERIOD_FINAL_RANGE, 14);
-#endif
-
-#if defined HIGH_SPEED
-  // reduce timing budget to 20 ms (default is about 33 ms)
-	vl.setTimingBudget(20000);
+#if defined LONG_RANGE
+  vl.setLongRangeMode();
+#elif defined HIGH_SPEED
+  vl.setHighSpeedMode();
 #elif defined HIGH_ACCURACY
-  // increase timing budget to 200 ms
-  vl.setTimingBudget(200000);
+  vl.setHighAccuracyMode();
 #endif
 
   #if (VL53L0X_DUAL_SENSOR == 1)

@@ -90,10 +90,12 @@ public:
       return false;
     return true;
   }
+
   bool reset() {
     hardwareReset();
     return softwareReset();
   }
+
   bool hardwareReset() {
     if (gpio_xshut == GPIO_NUM_MAX)
       return false;
@@ -103,6 +105,7 @@ public:
     vTaskDelay(10 / portTICK_PERIOD_MS);
     return true;
   }
+
   bool softwareReset() {
     VL53L0X_Error status = VL53L0X_ResetDevice(&vl53l0x_dev);
     ESP_LOGI(TAG, "VL53L0X reseted");
@@ -112,6 +115,7 @@ public:
     }
     return true;
   }
+
   /**
    * @brief Set the I2C address of the VL53L0X
    *
@@ -130,11 +134,80 @@ public:
 
     return true;
   }
+
+  bool setHighSpeedMode(void) {
+    VL53L0X_Error status = VL53L0X_SetLimitCheckValue(&vl53l0x_dev, VL53L0X_CHECKENABLE_SIGNAL_RATE_FINAL_RANGE, (FixPoint1616_t)(0.25*65536));
+    if (status != VL53L0X_ERROR_NONE) {
+      print_pal_error(status, "VL53L0X_setHighSpeedMode");
+      return false;
+    }
+    status = VL53L0X_SetLimitCheckValue(&vl53l0x_dev, VL53L0X_CHECKENABLE_SIGMA_FINAL_RANGE, (FixPoint1616_t)(32*65536));
+    if (status != VL53L0X_ERROR_NONE) {
+      print_pal_error(status, "VL53L0X_setHighSpeedMode");
+      return false;
+    }
+    status = setTimingBudget(20000);
+    if (status != VL53L0X_ERROR_NONE) {
+      print_pal_error(status, "VL53L0X_setHighSpeedMode");
+      return false;
+    }
+    return true;
+  }
+
+  bool setHighAccuracyMode(void) {
+    VL53L0X_Error status = VL53L0X_SetLimitCheckValue(&vl53l0x_dev, VL53L0X_CHECKENABLE_SIGNAL_RATE_FINAL_RANGE, (FixPoint1616_t)(0.25*65536));
+    if (status != VL53L0X_ERROR_NONE) {
+      print_pal_error(status, "VL53L0X_setHighAccuracyMode");
+      return false;
+    }
+    status = VL53L0X_SetLimitCheckValue(&vl53l0x_dev, VL53L0X_CHECKENABLE_SIGMA_FINAL_RANGE, (FixPoint1616_t)(18*65536));
+    if (status != VL53L0X_ERROR_NONE) {
+      print_pal_error(status, "VL53L0X_setHighAccuracyMode");
+      return false;
+    }
+    status = setTimingBudget(200000);
+    if (status != VL53L0X_ERROR_NONE) {
+      print_pal_error(status, "VL53L0X_setHighAccuracyMode");
+      return false;
+    }
+    return true;
+  }
+
+  bool setLongRangeMode(void) {
+    VL53L0X_Error status = VL53L0X_SetLimitCheckValue(&vl53l0x_dev, VL53L0X_CHECKENABLE_SIGNAL_RATE_FINAL_RANGE, (FixPoint1616_t)(0.1*65536));
+    if (status != VL53L0X_ERROR_NONE) {
+      print_pal_error(status, "VL53L0X_setLongRangeMode");
+      return false;
+    }
+    status = VL53L0X_SetLimitCheckValue(&vl53l0x_dev, VL53L0X_CHECKENABLE_SIGMA_FINAL_RANGE, (FixPoint1616_t)(60*65536));
+    if (status != VL53L0X_ERROR_NONE) {
+      print_pal_error(status, "VL53L0X_setLongRangeMode");
+      return false;
+    }
+    status = setTimingBudget(33000);
+    if (status != VL53L0X_ERROR_NONE) {
+      print_pal_error(status, "VL53L0X_setLongRangeMode");
+      return false;
+    }
+    status = VL53L0X_SetVcselPulsePeriod(&vl53l0x_dev, VL53L0X_VCSEL_PERIOD_PRE_RANGE, 18);
+    if (status != VL53L0X_ERROR_NONE) {
+      print_pal_error(status, "VL53L0X_setLongRangeMode");
+      return false;
+    }
+    status = VL53L0X_SetVcselPulsePeriod(&vl53l0x_dev, VL53L0X_VCSEL_PERIOD_FINAL_RANGE, 14);
+    if (status != VL53L0X_ERROR_NONE) {
+      print_pal_error(status, "VL53L0X_setLongRangeMode");
+      return false;
+    }
+    return true;
+  }
+
   bool read(uint16_t *pRangeMilliMeter) {
     if (gpio_gpio1 != GPIO_NUM_MAX)
       return readSingleWithInterrupt(pRangeMilliMeter);
     return readSingleWithPolling(pRangeMilliMeter);
   }
+
   bool readSingleWithPolling(uint16_t *pRangeMilliMeter) {
     VL53L0X_RangingMeasurementData_t MeasurementData;
     VL53L0X_Error status =
